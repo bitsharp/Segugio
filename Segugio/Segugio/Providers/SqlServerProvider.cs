@@ -15,30 +15,7 @@ namespace Segugio.Providers;
 /// </remarks>
 public class SqlServerProvider : ISegugioProvider
 {
-    /// <summary>
-    /// Stringa di connessione al database SQL Server.
-    /// </summary>
-    public string ConnectionString { get; set; }
-
-    /// <summary>
-    /// Nome dello schema della tabella di audit.
-    /// </summary>
-    public string SchemaName { get; set; }
-
-    /// <summary>
-    /// Nome della tabella di audit.
-    /// </summary>
-    public string TableName { get; set; }
-
-    /// <summary>
-    /// Nome della colonna chiave primaria della tabella di audit.
-    /// </summary>
-    public string FieldKeyName { get; set; }
-
-    /// <summary>
-    /// Nome della colonna in cui verranno salvati i dati JSON degli eventi di audit.
-    /// </summary>
-    public string DataColumnName { get; set; }
+    private readonly AuditTableConfiguration _configuration;
 
     /// <summary>
     /// Costruisce un'istanza del provider SQL Server.
@@ -48,13 +25,10 @@ public class SqlServerProvider : ISegugioProvider
     /// <param name="tableName">Il nome della tabella di audit.</param>
     /// <param name="fieldKeyName">Il nome della colonna chiave primaria.</param>
     /// <param name="dataColumnName">Il nome della colonna in cui salvare i dati JSON.</param>
-    public SqlServerProvider(string connectionString, string schemaName, string tableName, string fieldKeyName, string dataColumnName)
+
+    public SqlServerProvider(AuditTableConfiguration configuration)
     {
-        ConnectionString = connectionString;
-        SchemaName = schemaName;
-        TableName = tableName;
-        FieldKeyName = fieldKeyName;
-        DataColumnName = dataColumnName;
+        _configuration = configuration;
     }
 
     /// <summary>
@@ -80,23 +54,76 @@ public class SqlServerProvider : ISegugioProvider
     /// </example>
     public AuditDataProvider GetAuditProvider(IContestoAudit contesto, IUtenteAudit utente)
     {
+        var customColumnList = new List<CustomColumn>(); 
+        if (!string.IsNullOrEmpty(_configuration.LastUpdate))
+            customColumnList.Add(new CustomColumn(_configuration.LastUpdate, ev => DateTime.Now));
+        if (!string.IsNullOrEmpty(_configuration.IpAddress))
+            customColumnList.Add(new CustomColumn(_configuration.IpAddress, ev => contesto.GetRemoteIpAddress()));
+        if (!string.IsNullOrEmpty(_configuration.RouteData))
+            customColumnList.Add(new CustomColumn(_configuration.RouteData, ev => JsonSerializer.Serialize(contesto.GetHttpRouteData())));
+        if (!string.IsNullOrEmpty(_configuration.UserName))
+            customColumnList.Add(new CustomColumn(_configuration.UserName, ev => utente.GetNetworkAccount()));
+        if (!string.IsNullOrEmpty(_configuration.UserRole))
+            customColumnList.Add(new CustomColumn(_configuration.UserRole, ev => utente.GetRoles()));
+        if (!string.IsNullOrEmpty(_configuration.UserAdmin))
+            customColumnList.Add(new CustomColumn(_configuration.UserAdmin, ev => utente.GetImpersonatedAccount()));
+        
         var sqlProvider = new SqlDataProvider()
         {
-            ConnectionString = ConnectionString,
-            Schema = SchemaName,
-            TableName = TableName,
-            IdColumnName = FieldKeyName,
-            JsonColumnName = DataColumnName,
-            CustomColumns = new List<CustomColumn>()
-            {
-                new CustomColumn("LastUpdate", ev => DateTime.Now),
-                new CustomColumn("IpAddress", ev => contesto.GetRemoteIpAddress()),
-                new CustomColumn("RouteData", ev => JsonSerializer.Serialize(contesto.GetHttpRouteData())),
-                new CustomColumn("UserName", ev => utente.GetNetworkAccount()),
-                new CustomColumn("UserRole", ev => utente.GetRoles()),
-                new CustomColumn("UserAdmin", ev => utente.GetImpersonatedAccount())
-            }
+            ConnectionString = _configuration.ConnectionString,
+            Schema = _configuration.SchemaName,
+            TableName = _configuration.TableName,
+            IdColumnName = _configuration.FieldKeyName,
+            JsonColumnName = _configuration.DataColumnName,
+            CustomColumns = customColumnList
         };
         return sqlProvider;
+    }
+}
+
+public class AuditTableConfiguration
+{
+    public string ConnectionString { get; }
+    public string SchemaName { get; }
+    public string TableName { get; }
+    public string FieldKeyName { get; }
+    public string DataColumnName { get; }
+
+    // Parametri string per colonne personalizzate
+    public string LastUpdate { get; }
+    public string IpAddress { get; }
+    public string RouteData { get; }
+    public string UserName { get; }
+    public string UserRole { get; }
+    public string UserAdmin { get; }
+
+    public AuditTableConfiguration(
+        string connectionString,
+        string schemaName,
+        string tableName,
+        string userName,
+        string dataColumnName,
+        string lastUpdate,
+        // optional parameter
+        string userRole = "",
+        string userAdmin = "",
+        string fieldKeyName = "",
+        string ipAddress = "",
+        string routeData = ""
+        )
+    {
+        ConnectionString = connectionString;
+        SchemaName = schemaName;
+        TableName = tableName;
+        FieldKeyName = fieldKeyName;
+        DataColumnName = dataColumnName;
+
+        // Inizializza i parametri per colonne personalizzate dalle stringhe passate
+        LastUpdate = lastUpdate;
+        IpAddress = ipAddress;
+        RouteData = routeData;
+        UserName = userName;
+        UserRole = userRole;
+        UserAdmin = userAdmin;
     }
 }

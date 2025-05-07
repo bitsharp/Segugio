@@ -24,6 +24,12 @@ public interface IContestoAudit
     string GetSessionId();
 
     /// <summary>
+    /// Recupera l'ID della terminale chiamante, se disponibile..
+    /// </summary>
+    /// <returns>Una stringa che rappresenta l'ID del terminale.</returns>
+    string GetTerminalId();
+
+    /// <summary>
     /// Recupera i dati relativi alla rotta HTTP attualmente utilizzata.
     /// </summary>
     /// <returns>

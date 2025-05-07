@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using SenderClient.Data;
 
-namespace YourProjectNamespace.Controllers
+namespace SenderClient.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]

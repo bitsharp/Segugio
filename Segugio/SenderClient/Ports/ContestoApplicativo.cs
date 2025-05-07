@@ -20,7 +20,12 @@ public class ContestoApplicativo : IContestoAudit
 
     public string GetSessionId()
     {
-        return ""; //_httpContextAccessor.HttpContext?.Session.Id ?? "";
+        return "sessionId"; //_httpContextAccessor.HttpContext?.Session.Id ?? "";
+    }
+
+    public string GetTerminalId()
+    {
+        return "terminalId"; //_httpContextAccessor.HttpContext?.Session.Id ?? "";
     }
 
     public RouteData GetHttpRouteData()

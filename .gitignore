@@ -6,6 +6,14 @@
 # Node artifact files
 node_modules/
 dist/
+bin/
+obj/
+*.user
+*.suo
+*.log
+.vscode/
+.idea/
+.DS_Store
 
 # Compiled Java class files
 *.class
@@ -47,4 +55,3 @@ Thumbs.db
 *.flv
 *.mov
 *.wmv
-

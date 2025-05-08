@@ -1,3 +1,4 @@
+using Audit.Core;
 using Microsoft.AspNetCore.Mvc;
 using SenderClient.Data;
 
@@ -14,13 +15,61 @@ namespace SenderClient.Controllers
             _context = context;
         }
 
-        // GET: api/test
+        // GET: api/Persona
         [HttpGet]
         public IActionResult GetAll()
         {
             var tests = _context.Tests.ToList();
             return Ok(tests);
         }
+
+        // POST: api/Persona/Login
+        [HttpPost]
+        [Route("Login")]
+        public IActionResult LogIn([FromBody] Persona persona)
+        {
+            using (var scope = AuditScope.Create("Login", () => new { Data = "Esempio" }, new { Utente = "Admin" }))
+            {
+                // Logica della tua operazione
+            }
+
+            return Ok("Autenticazione effettuata con successo.");
+        }
+
+        // POST: api/Persona/Logout
+        [HttpPost]
+        [Route("Logout")]
+        public IActionResult Logout([FromBody] Persona persona)
+        {
+            using (var scope = AuditScope.Create("Login", () => new { Data = "Esempio" }, new { Utente = "Admin" }))
+            {
+                // Logica della tua operazione
+            }
+
+            return Ok("Autenticazione effettuata con successo.");
+        }
+
+
+        // GET: api/Persona/Error
+        [HttpGet]
+        [Route("ErroreGenerato")]
+        public IActionResult ErroreGenerato()
+        {
+            using (var scope = AuditScope.Create("Login", () => new { Data = "Esempio" }, new { Utente = "Admin" }))
+            {
+                try
+                {
+                    throw new Exception("Errore generato");
+                }
+                catch (Exception e)
+                {
+                    return BadRequest(e.Message);
+                }
+            }
+
+            return Ok("");
+        }
+
 
         // POST: api/test
         [HttpPost]

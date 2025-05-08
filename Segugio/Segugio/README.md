@@ -52,18 +52,26 @@ Se preferisci utilizzare il file DLL precompilato:
 ```csharp
 public class ContestoAudit : IContestoAudit
 {
-    public string GetRemoteIpAddress() => "127.0.0.1";
+    public string GetRemoteIpAddress() => "192.168.1.1"; // Esempio di indirizzo IP remoto
 
-    public string GetSessionId() => "session-id-123";
+    public string GetSessionId() => Guid.NewGuid().ToString(); // Genera un ID univoco per la sessione
 
-    public RouteData? GetHttpRouteData() => null;
+    public string GetTerminalId() => Environment.MachineName; // Restituisce il nome del terminale
+
+    public RouteData? GetHttpRouteData() => return new RouteData(); // Restituisci configurazione per la rotta HTTP (esempio semplificato)
 }
 ```
 
 ### 2. Uso di un provider già incluso nella libreria
 Ad esempio, puoi configurare i due già previsti così:
 ```csharp
-    new SqlServerProvider(connectionString, "SchemaTabellaDiAudit", "NomeTabellaDiAudit", "CampoChiave", "CampoJSon"),
+    new SqlServerProvider(
+        new AuditTableConfiguration(connectionString,"SchemaTabellaDiAudit","NomeTabellaDiAudit",
+            "CampoUserName","CampoDatiJSon", "CampoUltimoAggiornamento", 
+            "CampoProfilo", "CampoUtenteAmministratore", 
+            "CampoIdTabellaAudit", "CampoIndirizzoIp","CampoRouteDataJson"
+        )
+    ),
     new SerilogProvider("serverSerilog", "porta")
 ```
 
@@ -129,27 +137,6 @@ public void OperazioneEsempio()
 ## Estendibilità
 
 - **Aggiungere nuovi provider**: Implementa l'interfaccia `ISegugioProvider` per supportare altri mezzi di logging (es. MongoDB, ElasticSearch).
-- **Contesto personalizzato**: Adatta la tua implementazione di `IContestoAudit` per aggiungere altre informazioni come dati del server o informazioni client-specifiche.
+- **Contesto personalizzato**: Adatta la tua implementazione di `IContestoAudit` e `IUtenteAudit` per aggiungere altre informazioni come dati del server o informazioni client-specifiche.
 
 ---
-
-## Debug e risoluzione problemi
-
-- Se non vengono generati log, verifica che:
-    - I provider siano stati configurati correttamente.
-    - I contesti audit restituiscano i valori necessari (es. indirizzo IP, ID sessione).
-
----
-
-## Supporto
-
-Per ulteriori dettagli, feature richieste o problemi:
-- **Website**: [www.segugio-logging.com](#)
-- **Repository GitHub**: [github.com/Tuonomelusso/Segugio](#)
-
----
-
-## Licenza
-
-Questa libreria è distribuita sotto licenza **MIT**. Puoi trovarne i dettagli all'interno della repository ufficiale.
-```

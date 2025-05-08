@@ -66,23 +66,29 @@ public class SerilogProvider : ISegugioProvider
                     .WriteTo.TCPSink($"tcp://{ServerAddress}:{ServerPort}") // TCP sink configuration
                     .CreateLogger();
 
+                var msg = (ev.GetEntityFrameworkEvent() != null ? ev.GetEntityFrameworkEvent().Entries.FirstOrDefault().Name : "");
+                var actionType = (ev.GetEntityFrameworkEvent() != null ? ev.GetEntityFrameworkEvent().Entries.FirstOrDefault().Name : "");
+                var primaryKey = (ev.GetEntityFrameworkEvent() != null ? ev.GetEntityFrameworkEvent().Entries.FirstOrDefault().PrimaryKey.FirstOrDefault().Value : "");
+
                 logger.Information($"{DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss,fff")} " +
-                                   $"user={doppioApice}{utente.GetNetworkAccount()}{doppioApice} " +
+                                   $"user={doppioApice}{utente.GetUserAccount()}{doppioApice} " +
                                    $"sessionId={doppioApice}{contesto.GetSessionId()}{doppioApice} " +
                                    $"terminaleId={doppioApice}{contesto.GetTerminalId()}{doppioApice} " +
                                    $"class={doppioApice}{ev.Environment.CallingMethodName}{doppioApice} " +
-                                   $"msg={doppioApice}{action} {ev.GetEntityFrameworkEvent().Entries.FirstOrDefault().Name}{doppioApice} " +
+                                   $"msg={doppioApice}{action} {msg}{doppioApice} " +
                                    $"ip={doppioApice}{contesto.GetRemoteIpAddress()}{doppioApice} " +
                                    $"query={doppioApice}/{contesto.GetHttpRouteData().Values["controller"]}/{action}{doppioApice} " +
                                    $"kpmgCode={doppioApice}KLOG1{ action switch
                                        {
+                                           "Login" => "001",
+                                           "Logout" => "002",
                                            "Insert" => "012",
                                            "Update" => "013",
                                            "Delete" => "014",
                                            _ => "011" }
                                    }0{doppioApice} " +
-                                   $"objectType={doppioApice}{ev.GetEntityFrameworkEvent().Entries.FirstOrDefault().Name}{doppioApice} " +
-                                   $"objectId={doppioApice}{ev.GetEntityFrameworkEvent().Entries.FirstOrDefault().PrimaryKey.FirstOrDefault().Value}{doppioApice} ");
+                                   $"objectType={doppioApice}{actionType}{doppioApice} " +
+                                   $"objectId={doppioApice}{primaryKey}{doppioApice} ");
             });
         });
         return serilogProvider;

@@ -10,22 +10,25 @@ namespace Segugio.Providers;
 /// Implementazione di <see cref="ISegugioProvider"/> che utilizza SQL Server per salvare gli eventi di audit.
 /// </summary>
 /// <remarks>
-/// Questo provider salva gli eventi di audit in una tabella configurata nel database SQL Server.
-/// Include colonne personalizzate per registrare informazioni aggiuntive.
+/// Questo provider inserisce gli eventi di audit in una tabella configurabile del database SQL Server.
+/// È compatibile con colonne personalizzate per registrare informazioni aggiuntive come indirizzo IP, dati delle route HTTP, e dettagli utente.
+/// Offre una soluzione scalabile per centralizzare i log e garantire l'integrità delle informazioni.
 /// </remarks>
 public class SqlServerProvider : ISegugioProvider
 {
     private readonly AuditTableConfiguration _configuration;
 
     /// <summary>
-    /// Costruisce un'istanza del provider SQL Server.
+    /// Inizializza un'istanza di <see cref="SqlServerProvider"/> con la configurazione specificata.
     /// </summary>
-    /// <param name="connectionString">La stringa di connessione al database.</param>
-    /// <param name="schemaName">Il nome dello schema della tabella di audit.</param>
-    /// <param name="tableName">Il nome della tabella di audit.</param>
-    /// <param name="fieldKeyName">Il nome della colonna chiave primaria.</param>
-    /// <param name="dataColumnName">Il nome della colonna in cui salvare i dati JSON.</param>
-
+    /// <param name="configuration">
+    /// Un oggetto <see cref="AuditTableConfiguration"/> che specifica i dettagli richiesti
+    /// per la connessione al database, il nome della tabella e le colonne di audit.
+    /// </param>
+    /// <remarks>
+    /// La configurazione include la stringa di connessione e i metadati richiesti per identificare la tabella
+    /// di audit, consentendo personalizzazioni su misura per esigenze specifiche.
+    /// </remarks>
     public SqlServerProvider(AuditTableConfiguration configuration)
     {
         _configuration = configuration;
@@ -34,27 +37,32 @@ public class SqlServerProvider : ISegugioProvider
     /// <summary>
     /// Restituisce un provider di dati di audit configurato per SQL Server.
     /// </summary>
-    /// <param name="contesto">Il contesto di audit, che fornisce informazioni di rete e sessione.</param>
-    /// <param name="utente">Le informazioni sull'utente, inclusi account e ruoli.</param>
-    /// <returns>Un'istanza di <see cref="AuditDataProvider"/> basata su SQL Server.</returns>
+    /// <param name="contesto">Il contesto di audit che include informazioni di rete e sessione.</param>
+    /// <param name="utente">Le informazioni sull'utente che includono account e ruoli correnti.</param>
+    /// <returns>Un'istanza di <see cref="AuditDataProvider"/> configurata per il database SQL Server.</returns>
     /// <remarks>
-    /// Salva gli eventi di audit nel database SQL Server. Sono supportate colonne personalizzate per informazioni aggiuntive come IP, route, e dettagli utente.
+    /// Configura un provider che invia gli eventi di audit al database, utilizzando colonne personalizzate per supportare
+    /// la registrazione di informazioni avanzate come timestamp, IP dell'utente e altre informazioni contestuali.
     /// </remarks>
     /// <example>
     /// Esempio d'uso:
     /// <code>
-    /// var provider = new SqlServerProvider(
-    ///     "Server=myServerAddress;Database=myDataBase;User Id=myUsername;Password=myPassword;",
-    ///     "dbo",
-    ///     "AuditLogs",
-    ///     "Id",
-    ///     "Data");
+    /// var configuration = new AuditTableConfiguration(
+    ///     connectionString: "Server=myServerAddress;Database=myDataBase;User Id=myUsername;Password=myPassword;",
+    ///     schemaName: "dbo",
+    ///     tableName: "AuditLogs",
+    ///     userName: "AuditUser",
+    ///     dataColumnName: "AuditData",
+    ///     lastUpdate: "LastUpdated"
+    /// );
+    ///
+    /// var provider = new SqlServerProvider(configuration);
     /// var auditProvider = provider.GetAuditProvider(contestoAudit, utenteAudit);
     /// </code>
     /// </example>
     public AuditDataProvider GetAuditProvider(IContestoAudit contesto, IUtenteAudit utente)
     {
-        var customColumnList = new List<CustomColumn>(); 
+        var customColumnList = new List<CustomColumn>();
         if (!string.IsNullOrEmpty(_configuration.LastUpdate))
             customColumnList.Add(new CustomColumn(_configuration.LastUpdate, ev => DateTime.Now));
         if (!string.IsNullOrEmpty(_configuration.IpAddress))
@@ -62,12 +70,12 @@ public class SqlServerProvider : ISegugioProvider
         if (!string.IsNullOrEmpty(_configuration.RouteData))
             customColumnList.Add(new CustomColumn(_configuration.RouteData, ev => JsonSerializer.Serialize(contesto.GetHttpRouteData())));
         if (!string.IsNullOrEmpty(_configuration.UserName))
-            customColumnList.Add(new CustomColumn(_configuration.UserName, ev => utente.GetNetworkAccount()));
+            customColumnList.Add(new CustomColumn(_configuration.UserName, ev => utente.GetUserAccount()));
         if (!string.IsNullOrEmpty(_configuration.UserRole))
             customColumnList.Add(new CustomColumn(_configuration.UserRole, ev => utente.GetRoles()));
         if (!string.IsNullOrEmpty(_configuration.UserAdmin))
-            customColumnList.Add(new CustomColumn(_configuration.UserAdmin, ev => utente.GetImpersonatedAccount()));
-        
+            customColumnList.Add(new CustomColumn(_configuration.UserAdmin, ev => utente.GetRealAccount()));
+
         var sqlProvider = new SqlDataProvider()
         {
             ConnectionString = _configuration.ConnectionString,
@@ -81,22 +89,54 @@ public class SqlServerProvider : ISegugioProvider
     }
 }
 
+/// <summary>
+/// Configurazione della tabella di audit per il provider SQL Server.
+/// </summary>
+/// <remarks>
+/// Specifica i dettagli necessari per configurare e utilizzare una tabella di audit in SQL Server.
+/// Include informazioni come connessione al database, schema, tabella e nomi delle colonne (standard e personalizzate).
+/// </remarks>
 public class AuditTableConfiguration
 {
+    /// <summary>La stringa di connessione al database SQL Server.</summary>
     public string ConnectionString { get; }
+    /// <summary>Il nome dello schema in cui si trova la tabella di audit.</summary>
     public string SchemaName { get; }
+    /// <summary>Il nome della tabella di audit in SQL Server.</summary>
     public string TableName { get; }
+    /// <summary>Il nome della colonna chiave primaria.</summary>
     public string FieldKeyName { get; }
+    /// <summary>Il nome della colonna che contiene i dati JSON dell'evento di audit.</summary>
     public string DataColumnName { get; }
 
-    // Parametri string per colonne personalizzate
+    // Colonne personalizzate
+    /// <summary>Il nome della colonna che registra l'ultima modifica.</summary>
     public string LastUpdate { get; }
+    /// <summary>Il nome della colonna che registra l'indirizzo IP dell'utente.</summary>
     public string IpAddress { get; }
+    /// <summary>Il nome della colonna che registra i dati delle route HTTP.</summary>
     public string RouteData { get; }
+    /// <summary>Il nome della colonna che registra il nome account dell'utente.</summary>
     public string UserName { get; }
+    /// <summary>Il nome della colonna che registra i ruoli dell'utente.</summary>
     public string UserRole { get; }
+    /// <summary>Il nome della colonna che registra l'account di amministrazione.</summary>
     public string UserAdmin { get; }
 
+    /// <summary>
+    /// Inizializza un'istanza di <see cref="AuditTableConfiguration"/>.
+    /// </summary>
+    /// <param name="connectionString">Stringa di connessione al database SQL Server.</param>
+    /// <param name="schemaName">Nome dello schema della tabella.</param>
+    /// <param name="tableName">Nome della tabella di audit.</param>
+    /// <param name="userName">Colonna per registrare il nome dell'utente.</param>
+    /// <param name="dataColumnName">Colonna per contenere i dati di audit in formato JSON.</param>
+    /// <param name="lastUpdate">Colonna per l'ultima modifica (valore temporale).</param>
+    /// <param name="userRole">Colonna opzionale per i ruoli dell'utente.</param>
+    /// <param name="userAdmin">Colonna opzionale per l'account amministrativo.</param>
+    /// <param name="fieldKeyName">Colonna opzionale per la chiave primaria.</param>
+    /// <param name="ipAddress">Colonna opzionale per l'indirizzo IP dell'utente.</param>
+    /// <param name="routeData">Colonna opzionale per i dati della route.</param>
     public AuditTableConfiguration(
         string connectionString,
         string schemaName,
@@ -104,13 +144,11 @@ public class AuditTableConfiguration
         string userName,
         string dataColumnName,
         string lastUpdate,
-        // optional parameter
         string userRole = "",
         string userAdmin = "",
         string fieldKeyName = "",
         string ipAddress = "",
-        string routeData = ""
-        )
+        string routeData = "")
     {
         ConnectionString = connectionString;
         SchemaName = schemaName;
@@ -118,7 +156,7 @@ public class AuditTableConfiguration
         FieldKeyName = fieldKeyName;
         DataColumnName = dataColumnName;
 
-        // Inizializza i parametri per colonne personalizzate dalle stringhe passate
+        // Inizializza i parametri per colonne personalizzate
         LastUpdate = lastUpdate;
         IpAddress = ipAddress;
         RouteData = routeData;

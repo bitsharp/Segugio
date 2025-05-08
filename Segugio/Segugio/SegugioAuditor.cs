@@ -6,23 +6,31 @@ using Segugio.Providers;
 namespace Segugio;
 
 /// <summary>
-/// Interfaccia per la gestione del sistema di audit nel contesto di Segugio.
+/// Interfaccia per la gestione del sistema di audit all'interno del contesto dell'applicazione Segugio.
 /// </summary>
+/// <remarks>
+/// L'interfaccia ISegugioAuditor fornisce un contratto per configurare il sistema di audit attraverso uno o più provider.
+/// Implementazioni specifiche possono essere utilizzate per centralizzare e gestire eventi di audit.
+/// </remarks>
 public interface ISegugioAuditor
 {
     /// <summary>
     /// Configura il sistema di audit utilizzando uno o più provider specificati.
     /// </summary>
-    /// <param name="providers">Elenco dei provider da utilizzare per l'audit.</param>
+    /// <param name="providers">Elenco dei provider da utilizzare per la gestione degli eventi di audit.</param>
+    /// <remarks>
+    /// Ogni provider nell'elenco viene configurato per contribuire alla gestione del registro di audit.
+    /// Questa configurazione è progettata per supportare diversi backend (ad esempio, database, file di log o strumenti esterni come Serilog).
+    /// </remarks>
     void Setup(IList<ISegugioProvider> providers);
 }
 
 /// <summary>
-/// Classe principale per la configurazione e gestione del sistema di audit Segugio.
+/// Classe dedicata alla configurazione e alla gestione centralizzata del sistema di audit dell'applicazione Segugio.
 /// </summary>
 /// <remarks>
-/// Questa classe consente di configurare e abilitare il sistema di audit basato su uno o più provider.
-/// Utilizzala per centralizzare la gestione dei log di audit in modo modulare e flessibile.
+/// La classe SegugioAuditor permette di configurare e abilitare il sistema di audit basato su provider specifici.
+/// Utilizza contesto e informazioni sull'utente per una gestione modulare e flessibile degli eventi.
 /// </remarks>
 public class SegugioAuditor : ISegugioAuditor
 {
@@ -30,10 +38,13 @@ public class SegugioAuditor : ISegugioAuditor
     private readonly IUtenteAudit _utenteAudit;
 
     /// <summary>
-    /// Costruisce un'istanza della classe <see cref="SegugioAuditor"/>.
+    /// Inizializza un'istanza della classe <see cref="SegugioAuditor"/>.
     /// </summary>
-    /// <param name="contestoAudit">Il contesto di audit per la configurazione (es., indirizzo IP, sessione).</param>
-    /// <param name="utenteAudit">Le informazioni sull'utente per l'audit (es., ID utente, ruolo).</param>
+    /// <param name="contestoAudit">Istanza che rappresenta il contesto di audit (ad esempio, indirizzo IP, sessione corrente).</param>
+    /// <param name="utenteAudit">Informazioni sull'utente utilizzate per l'audit (ad esempio, ID, ruolo).</param>
+    /// <remarks>
+    /// L'istanza viene utilizzata per registrare eventi di audit dettagliati basati sul contesto e sulle informazioni dell'utente.
+    /// </remarks>
     public SegugioAuditor(IContestoAudit contestoAudit, IUtenteAudit utenteAudit)
     {
         _contestoAudit = contestoAudit;
@@ -41,15 +52,15 @@ public class SegugioAuditor : ISegugioAuditor
     }
 
     /// <summary>
-    /// Configura il sistema di audit utilizzando un elenco di provider.
+    /// Configura il sistema di audit integrando uno o più provider specificati.
     /// </summary>
     /// <param name="providers">
-    /// Elenco di provider che implementano <see cref="ISegugioProvider"/>.
-    /// I provider configurati vengono utilizzati per registrare gli eventi di audit.
+    /// Elenco di provider che implementano <see cref="ISegugioProvider"/>. Ogni provider viene configurato
+    /// per registrare gli eventi di audit utilizzando un backend specifico (ad esempio, database, servizi remoti o file).
     /// </param>
     /// <remarks>
-    /// Questa configurazione abilita il sistema di audit per gestire eventi dagli ambienti desiderati.
-    /// Ogni provider è responsabile del proprio backend (es., database, file di log, Serilog).
+    /// I provider abilitati tramite questa configurazione consentono una gestione ottimale e centralizzata degli eventi di audit.
+    /// La modularità permette di aggiungere facilmente nuovi provider o sostituirne uno esistente per supportare esigenze specifiche.
     /// </remarks>
     /// <example>
     /// Esempio di configurazione del sistema di audit:

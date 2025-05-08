@@ -82,8 +82,12 @@ var segugioAuditor = builder.Services.BuildServiceProvider().GetRequiredService(
 segugioAuditor.Setup(
     new List  
     {
-        new SqlServerProvider(connectionString, "Audit", "EntityAuditLog", "Id", "DataJSon"), 
-        new SerilogProvider("localhost", "514")
+      new SqlServerProvider(
+        new AuditTableConfiguration(connectionString,"Audit","EntityAuditLog","UserName","DataJSon", 
+            "LastUpdate", "UserRole", "UserAdmin", "Id", "IpAddress","RouteData"
+        )
+      ),
+      new SerilogProvider("localhost", "514")
     }
 );
 ```

@@ -10,12 +10,12 @@ public class UtenteConnesso : IUtenteAudit
     {
     }
 
-    public string GetNetworkAccount()
+    public string GetUserAccount()
     {
         return "mrossi";
     }
 
-    public string GetImpersonatedAccount()
+    public string GetRealAccount()
     {
         return "";
     }

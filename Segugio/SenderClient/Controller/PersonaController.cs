@@ -1,5 +1,7 @@
 using Audit.Core;
 using Microsoft.AspNetCore.Mvc;
+using Segugio;
+using Segugio.Ports;
 using SenderClient.Data;
 
 namespace SenderClient.Controllers
@@ -8,18 +10,20 @@ namespace SenderClient.Controllers
     [Route("api/[controller]")]
     public class PersonaController : ControllerBase
     {
-        private readonly AppDbContext _context;
+        private readonly AppDbDbContext _dbContext;
+        private readonly ISegugioAuditor _segugioAuditor;
 
-        public PersonaController(AppDbContext context)
+        public PersonaController(AppDbDbContext dbContext, ISegugioAuditor segugioAuditor)
         {
-            _context = context;
+            _dbContext = dbContext;
+            _segugioAuditor = segugioAuditor;
         }
 
         // GET: api/Persona
         [HttpGet]
         public IActionResult GetAll()
         {
-            var tests = _context.Tests.ToList();
+            var tests = _dbContext.Tests.ToList();
             return Ok(tests);
         }
 
@@ -28,9 +32,11 @@ namespace SenderClient.Controllers
         [Route("Login")]
         public IActionResult LogIn([FromBody] Persona persona)
         {
-            using (var scope = AuditScope.Create("Login", () => new { Data = "Esempio" }, new { Utente = "Admin" }))
+            using (var scope = _segugioAuditor.CreateScope("Login"))
             {
                 // Logica della tua operazione
+                var account = "MROSSI";
+                var isLogged = true;
             }
 
             return Ok("Autenticazione effettuata con successo.");
@@ -41,30 +47,31 @@ namespace SenderClient.Controllers
         [Route("Logout")]
         public IActionResult Logout([FromBody] Persona persona)
         {
-            using (var scope = AuditScope.Create("Login", () => new { Data = "Esempio" }, new { Utente = "Admin" }))
+            using (var scope = _segugioAuditor.CreateScope("Logout"))
             {
                 // Logica della tua operazione
+                var account = "MROSSI";
+                var isLogged = false;
             }
 
             return Ok("Autenticazione effettuata con successo.");
         }
-
-
+        
         // GET: api/Persona/Error
         [HttpGet]
         [Route("ErroreGenerato")]
         public IActionResult ErroreGenerato()
         {
-            using (var scope = AuditScope.Create("Login", () => new { Data = "Esempio" }, new { Utente = "Admin" }))
+            try
             {
-                try
+                using (var scope = _segugioAuditor.CreateScope("Lettura dati utente"))
                 {
                     throw new Exception("Errore generato");
                 }
-                catch (Exception e)
-                {
-                    return BadRequest(e.Message);
-                }
+            }
+            catch (Exception e)
+            {
+                return BadRequest(e.Message);
             }
 
             return Ok("");
@@ -78,8 +85,8 @@ namespace SenderClient.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            _context.Tests.Add(persona);
-            _context.SaveChanges();
+            _dbContext.Tests.Add(persona);
+            _dbContext.SaveChanges();
             return CreatedAtAction(nameof(GetById), new { id = persona.Id }, persona);
         }
 
@@ -87,7 +94,7 @@ namespace SenderClient.Controllers
         [HttpGet("{id}")]
         public IActionResult GetById(long id)
         {
-            var test = _context.Tests.Find(id);
+            var test = _dbContext.Tests.Find(id);
             if (test == null)
                 return NotFound();
 
@@ -98,12 +105,12 @@ namespace SenderClient.Controllers
         [HttpDelete("{id}")]
         public IActionResult Delete(long id)
         {
-            var test = _context.Tests.Find(id);
+            var test = _dbContext.Tests.Find(id);
             if (test == null)
                 return NotFound();
 
-            _context.Tests.Remove(test);
-            _context.SaveChanges();
+            _dbContext.Tests.Remove(test);
+            _dbContext.SaveChanges();
 
             return NoContent();
         }

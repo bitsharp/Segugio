@@ -17,5 +17,5 @@ public interface ISegugioProvider
 /// <param name="contesto">Il contesto di audit, che fornisce informazioni di rete, sessione e route.</param>
 /// <param name="utente">Le informazioni sull'utente, inclusi nome, ruolo e account impersonato.</param>
 /// <returns>Un'istanza di <see cref="AuditDataProvider"/> configurata.</returns>
-    AuditDataProvider GetAuditProvider(IContestoAudit contesto, IUtenteAudit utente);
+    AuditDataProvider GetAuditProvider(IContestoAudit contesto);
 }

@@ -1,13 +1,14 @@
 using Audit.EntityFramework;
 using Microsoft.EntityFrameworkCore;
+using Segugio.Context;
 
 namespace SenderClient.Data
 {
-    public class AppDbContext: AuditDbContext
+    public class AppDbDbContext: SegugioDbContext
     {
         public DbSet<Persona> Tests { get; set; }
 
-        public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
+        public AppDbDbContext(DbContextOptions<AppDbDbContext> options) : base(options) { }
 
     
         protected override void OnModelCreating(ModelBuilder modelBuilder)

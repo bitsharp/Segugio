@@ -1,0 +1,15 @@
+core.repositoryformatversion=0
+core.filemode=false
+core.bare=false
+core.logallrefupdates=true
+core.symlinks=false
+core.ignorecase=true
+remote.origin.url=https://dev1_bitsharp@bitbucket.org/bitsharpprojects/segugio.git
+remote.origin.fetch=+refs/heads/*:refs/remotes/origin/*
+remote.origin.pushurl=https://dev1_bitsharp@bitbucket.org/bitsharpprojects/segugio.git
+branch.main.remote=origin
+branch.main.merge=refs/heads/main
+branch.Creazione.remote=origin
+branch.Creazione.merge=refs/heads/Creazione
+remote.github.url=https://github.com/dev1bitsharp/Segugio.git
+remote.github.fetch=+refs/heads/*:refs/remotes/github/*

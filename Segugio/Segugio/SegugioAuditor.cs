@@ -23,6 +23,9 @@ public interface ISegugioAuditor
     /// Questa configurazione è progettata per supportare diversi backend (ad esempio, database, file di log o strumenti esterni come Serilog).
     /// </remarks>
     void Setup(IList<ISegugioProvider> providers);
+
+    public AuditScope CreateScope(string eventType);
+    public AuditScope CreateScope(string eventType, object target, object extraField);
 }
 
 /// <summary>
@@ -35,7 +38,6 @@ public interface ISegugioAuditor
 public class SegugioAuditor : ISegugioAuditor
 {
     private readonly IContestoAudit _contestoAudit;
-    private readonly IUtenteAudit _utenteAudit;
 
     /// <summary>
     /// Inizializza un'istanza della classe <see cref="SegugioAuditor"/>.
@@ -45,10 +47,9 @@ public class SegugioAuditor : ISegugioAuditor
     /// <remarks>
     /// L'istanza viene utilizzata per registrare eventi di audit dettagliati basati sul contesto e sulle informazioni dell'utente.
     /// </remarks>
-    public SegugioAuditor(IContestoAudit contestoAudit, IUtenteAudit utenteAudit)
+    public SegugioAuditor(IContestoAudit contestoAudit)
     {
         _contestoAudit = contestoAudit;
-        _utenteAudit = utenteAudit;
     }
 
     /// <summary>
@@ -81,8 +82,19 @@ public class SegugioAuditor : ISegugioAuditor
     {
         var compositeDataProvider = new CompositeDataProvider(
             providers
-                .Select(p => p.GetAuditProvider(_contestoAudit, _utenteAudit))
+                .Select(p => p.GetAuditProvider(_contestoAudit))
                 .ToList());
         Configuration.Setup().UseCustomProvider(compositeDataProvider);
+    }
+
+    public AuditScope CreateScope(string eventType)
+    {
+        // return AuditScope.Create("Login", () => new { Data = "Esempio" }, new { Utente = "Admin" });
+        return AuditScope.Create("Login", () => null);
+    }
+
+    public AuditScope CreateScope(string eventType, object target, object extraField)
+    {
+        return AuditScope.Create(eventType, () => target, extraField);
     }
 }

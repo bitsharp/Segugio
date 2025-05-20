@@ -60,7 +60,7 @@ public class SqlServerProvider : ISegugioProvider
     /// var auditProvider = provider.GetAuditProvider(contestoAudit, utenteAudit);
     /// </code>
     /// </example>
-    public AuditDataProvider GetAuditProvider(IContestoAudit contesto, IUtenteAudit utente)
+    public AuditDataProvider GetAuditProvider(IContestoAudit contesto)
     {
         var customColumnList = new List<CustomColumn>();
         if (!string.IsNullOrEmpty(_configuration.LastUpdate))
@@ -70,11 +70,11 @@ public class SqlServerProvider : ISegugioProvider
         if (!string.IsNullOrEmpty(_configuration.RouteData))
             customColumnList.Add(new CustomColumn(_configuration.RouteData, ev => JsonSerializer.Serialize(contesto.GetHttpRouteData())));
         if (!string.IsNullOrEmpty(_configuration.UserName))
-            customColumnList.Add(new CustomColumn(_configuration.UserName, ev => utente.GetUserAccount()));
+            customColumnList.Add(new CustomColumn(_configuration.UserName, ev => contesto.GetUserAccount()));
         if (!string.IsNullOrEmpty(_configuration.UserRole))
-            customColumnList.Add(new CustomColumn(_configuration.UserRole, ev => utente.GetRoles()));
+            customColumnList.Add(new CustomColumn(_configuration.UserRole, ev => contesto.GetRoles()));
         if (!string.IsNullOrEmpty(_configuration.UserAdmin))
-            customColumnList.Add(new CustomColumn(_configuration.UserAdmin, ev => utente.GetRealAccount()));
+            customColumnList.Add(new CustomColumn(_configuration.UserAdmin, ev => contesto.GetRealAccount()));
 
         var sqlProvider = new SqlDataProvider()
         {

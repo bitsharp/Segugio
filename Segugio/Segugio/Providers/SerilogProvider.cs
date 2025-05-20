@@ -15,25 +15,11 @@ namespace Segugio.Providers;
 /// </remarks>
 public class SerilogProvider : ISegugioProvider
 {
-    /// <summary>
-    /// Indirizzo del server remoto a cui inviare i log via Serilog.
-    /// </summary>
-    public string ServerAddress { get; set; }
+    private readonly ISerilogConfiguration _configuration;
 
-    /// <summary>
-    /// Porta del server remoto a cui inviare i log via Serilog.
-    /// </summary>
-    public string ServerPort { get; set; }
-
-    /// <summary>
-    /// Costruisce un'istanza del provider Serilog.
-    /// </summary>
-    /// <param name="serverAddress">L'indirizzo IP o il nome host del server di log.</param>
-    /// <param name="serverPort">La porta TCP del server di log.</param>
-    public SerilogProvider(string serverAddress, string serverPort)
+    public SerilogProvider(ISerilogConfiguration configuration)
     {
-        ServerAddress = serverAddress;
-        ServerPort = serverPort;
+        _configuration = configuration;
     }
 
     /// <summary>
@@ -52,7 +38,7 @@ public class SerilogProvider : ISegugioProvider
     /// var auditProvider = provider.GetAuditProvider(contestoAudit, utenteAudit);
     /// </code>
     /// </example>
-    public AuditDataProvider GetAuditProvider(IContestoAudit contesto, IUtenteAudit utente)
+    public AuditDataProvider GetAuditProvider(IContestoAudit contesto)
     {
         var serilogProvider = new DynamicDataProvider(config =>
         {
@@ -60,37 +46,60 @@ public class SerilogProvider : ISegugioProvider
             {
                 // Recupera l'oggetto target e l'azione
                 var action = contesto.GetHttpRouteData().Values["action"];
-                var doppioApice = '\"';
-                
+
                 var logger = new LoggerConfiguration()
-                    .WriteTo.TCPSink($"tcp://{ServerAddress}:{ServerPort}") // TCP sink configuration
+                    .WriteTo
+                    .TCPSink(
+                        $"tcp://{_configuration.ServerAddress}:{_configuration.ServerPort}") // TCP sink configuration
                     .CreateLogger();
 
-                var msg = (ev.GetEntityFrameworkEvent() != null ? ev.GetEntityFrameworkEvent().Entries.FirstOrDefault().Name : "");
-                var actionType = (ev.GetEntityFrameworkEvent() != null ? ev.GetEntityFrameworkEvent().Entries.FirstOrDefault().Name : "");
-                var primaryKey = (ev.GetEntityFrameworkEvent() != null ? ev.GetEntityFrameworkEvent().Entries.FirstOrDefault().PrimaryKey.FirstOrDefault().Value : "");
+                var entiyName = (ev.GetEntityFrameworkEvent() != null
+                    ? ev.GetEntityFrameworkEvent().Entries.FirstOrDefault().Name
+                    : "");
+                var primaryKey = (ev.GetEntityFrameworkEvent() != null
+                    ? ev.GetEntityFrameworkEvent().Entries.FirstOrDefault().PrimaryKey.FirstOrDefault().Value
+                    : "");
+                var esito = !string.IsNullOrWhiteSpace(ev.Environment.Exception);
 
-                logger.Information($"{DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss,fff")} " +
-                                   $"user={doppioApice}{utente.GetUserAccount()}{doppioApice} " +
-                                   $"sessionId={doppioApice}{contesto.GetSessionId()}{doppioApice} " +
-                                   $"terminaleId={doppioApice}{contesto.GetTerminalId()}{doppioApice} " +
-                                   $"class={doppioApice}{ev.Environment.CallingMethodName}{doppioApice} " +
-                                   $"msg={doppioApice}{action} {msg}{doppioApice} " +
-                                   $"ip={doppioApice}{contesto.GetRemoteIpAddress()}{doppioApice} " +
-                                   $"query={doppioApice}/{contesto.GetHttpRouteData().Values["controller"]}/{action}{doppioApice} " +
-                                   $"kpmgCode={doppioApice}KLOG1{ action switch
-                                       {
-                                           "Login" => "001",
-                                           "Logout" => "002",
-                                           "Insert" => "012",
-                                           "Update" => "013",
-                                           "Delete" => "014",
-                                           _ => "011" }
-                                   }0{doppioApice} " +
-                                   $"objectType={doppioApice}{actionType}{doppioApice} " +
-                                   $"objectId={doppioApice}{primaryKey}{doppioApice} ");
+                var msg = _configuration.GetMessage(new SerilogEvent
+                {
+                    Action = action.ToString(),
+                    Entity = entiyName,
+                    PrimaryKey = primaryKey.ToString(),
+                    Success = esito,
+                    ContestoAudit = contesto,
+                    AuditEvent = ev
+                });
+
+                logger.Information(msg);
             });
         });
         return serilogProvider;
     }
+}
+
+public interface ISerilogConfiguration
+{
+    /// <summary>
+    /// Indirizzo del server remoto a cui inviare i log via Serilog.
+    /// </summary>
+    string ServerAddress { get; }
+
+    /// <summary>
+    /// Porta del server remoto a cui inviare i log via Serilog.
+    /// </summary>
+    string ServerPort { get; }
+
+    public string GetMessage(SerilogEvent serilogEvent);
+}
+
+public class SerilogEvent
+{
+    public string Action { get; set; }
+    public string Entity { get; set; }
+    public string PrimaryKey { get; set; }
+    public bool Success { get; set; }
+
+    public IContestoAudit ContestoAudit { get; set; }
+    public AuditEvent AuditEvent { get; set; }
 }

@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Segugio.Ports;
 
-namespace SenderClient.Ports;
+namespace SenderClient.AuditAdapter;
 
 public class ContestoApplicativo : IContestoAudit
 {
@@ -31,5 +31,19 @@ public class ContestoApplicativo : IContestoAudit
     public RouteData GetHttpRouteData()
     {
         return _httpContextAccessor.HttpContext?.GetRouteData();
+    }
+    public string GetUserAccount()
+    {
+        return "mrossi";
+    }
+
+    public string GetRealAccount()
+    {
+        return "";
+    }
+
+    public string GetRoles()
+    {
+        return "UtenteGenerico";
     }
 }

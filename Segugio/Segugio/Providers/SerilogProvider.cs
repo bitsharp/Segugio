@@ -1,4 +1,5 @@
-﻿using Audit.Core;
+﻿using System.Security;
+using Audit.Core;
 using Audit.Core.Providers;
 using Audit.EntityFramework;
 using Segugio.Ports;
@@ -22,6 +23,8 @@ public class SerilogProvider : ISegugioProvider
         _configuration = configuration;
     }
 
+    public string GetProviederName => "SerilogProvider";
+
     /// <summary>
     /// Restituisce un provider di dati di audit configurato per Serilog.
     /// </summary>
@@ -44,9 +47,6 @@ public class SerilogProvider : ISegugioProvider
         {
             config.OnInsert(ev =>
             {
-                // Recupera l'oggetto target e l'azione
-                var action = contesto.GetHttpRouteData().Values["action"];
-
                 var logger = new LoggerConfiguration()
                     .WriteTo
                     .TCPSink(
@@ -63,7 +63,6 @@ public class SerilogProvider : ISegugioProvider
 
                 var msg = _configuration.GetMessage(new SerilogEvent
                 {
-                    Action = action.ToString(),
                     Entity = entiyName,
                     PrimaryKey = primaryKey.ToString(),
                     Success = esito,
@@ -71,11 +70,29 @@ public class SerilogProvider : ISegugioProvider
                     AuditEvent = ev
                 });
 
-                logger.Information(msg);
+                try
+                {
+                    logger.Information(msg);
+                }
+                catch (Exception e)
+                {
+                    switch (_configuration.LogTypes) 
+                    {
+                        case ISegugioProvider.LogTypes.Console:
+                            Console.WriteLine(e);
+                            break;
+                        case ISegugioProvider.LogTypes.Exception:
+                            throw new SegugioException("Error sending log to Serilog", e);
+                        default:
+                            break;
+                    };
+                }
             });
         });
         return serilogProvider;
     }
+    
+    public ISegugioProvider.LogTypes LogType => _configuration.LogTypes;
 }
 
 public interface ISerilogConfiguration
@@ -90,12 +107,13 @@ public interface ISerilogConfiguration
     /// </summary>
     string ServerPort { get; }
 
-    public string GetMessage(SerilogEvent serilogEvent);
+    ISegugioProvider.LogTypes LogTypes { get; }
+
+    string GetMessage(SerilogEvent serilogEvent);
 }
 
 public class SerilogEvent
 {
-    public string Action { get; set; }
     public string Entity { get; set; }
     public string PrimaryKey { get; set; }
     public bool Success { get; set; }

@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using System.Text.Json;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Segugio.Ports;
@@ -12,38 +13,17 @@ public class ContestoApplicativo : IContestoAudit
     {
         _httpContextAccessor = httpContextAccessor;
     }
-    
-    public string GetRemoteIpAddress()
-    {
-        return _httpContextAccessor.HttpContext?.Connection.RemoteIpAddress?.ToString() ?? "";
-    }
 
-    public string GetSessionId()
+    public string GetCustomAttribute(string attributeName)
     {
-        return "sessionId"; //_httpContextAccessor.HttpContext?.Session.Id ?? "";
-    }
-
-    public string GetTerminalId()
-    {
-        return "terminalId"; //_httpContextAccessor.HttpContext?.Session.Id ?? "";
-    }
-
-    public RouteData GetHttpRouteData()
-    {
-        return _httpContextAccessor.HttpContext?.GetRouteData();
-    }
-    public string GetUserAccount()
-    {
-        return "mrossi";
-    }
-
-    public string GetRealAccount()
-    {
-        return "";
-    }
-
-    public string GetRoles()
-    {
-        return "UtenteGenerico";
+        return attributeName switch
+        {
+            "IpAddress" => _httpContextAccessor.HttpContext?.Connection.RemoteIpAddress?.ToString() ?? "",
+            "RoutePath" => JsonSerializer.Serialize(_httpContextAccessor.HttpContext?.GetRouteData()??new RouteData()),
+            "UserName" => "MROSSI",
+            "QueryPath" => $"{_httpContextAccessor.HttpContext?.GetRouteData().Values["controller"]}/{_httpContextAccessor.HttpContext?.GetRouteData().Values["action"]}",
+            "Role" => "UtenteGenerico",
+            _ => ""
+        };
     }
 }

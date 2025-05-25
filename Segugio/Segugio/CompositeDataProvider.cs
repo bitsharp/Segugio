@@ -1,12 +1,27 @@
 ﻿using Audit.Core;
+using Segugio.Providers;
 
 namespace Segugio;
 
+internal class SegugioDataProvider
+{
+    public SegugioDataProvider(string providerType, AuditDataProvider provider, ISegugioProvider.LogTypes logTypes)
+    {
+        ProviderType = providerType;
+        Provider = provider;
+        LogTypes = logTypes;
+    }
+
+    public string ProviderType { get; }
+    public AuditDataProvider Provider { get; }
+    public ISegugioProvider.LogTypes LogTypes { get; }
+}
+
 internal class CompositeDataProvider : AuditDataProvider
 {
-    private readonly IList<AuditDataProvider> _providers;
+    private readonly IList<SegugioDataProvider> _providers;
     
-    public CompositeDataProvider(IList<AuditDataProvider> providers)
+    public CompositeDataProvider(IList<SegugioDataProvider> providers)
     {
         _providers = providers;
     }
@@ -15,7 +30,15 @@ internal class CompositeDataProvider : AuditDataProvider
     {
         foreach (var provider in _providers)
         {
-            provider.InsertEvent(auditEvent);
+            try
+            {
+                provider.Provider.InsertEvent(auditEvent);
+                LogMessage("Event inserted", provider);
+            }
+            catch (Exception e)
+            {
+                LogError("Error inserting event", e, provider);
+            }
         }
         return null;
     }
@@ -24,7 +47,15 @@ internal class CompositeDataProvider : AuditDataProvider
     {
         foreach (var provider in _providers)
         {
-            provider.ReplaceEvent(eventId, auditEvent);
+            try
+            {
+                provider.Provider.ReplaceEvent(eventId, auditEvent);
+                LogMessage("Event replaced", provider);
+            }
+            catch (Exception e)
+            {
+                LogError("Error replacing event", e, provider);
+            }
         }
     }
 
@@ -32,10 +63,18 @@ internal class CompositeDataProvider : AuditDataProvider
     {
         foreach (var provider in _providers)
         {
-            var result = provider.GetEvent<T>(eventId);
-            if (result != null)
+            try
             {
-                return result;
+                var result = provider.Provider.GetEvent<T>(eventId);
+                LogMessage("Event retrieved", provider);
+                if (result != null)
+                {
+                    return result;
+                }
+            }
+            catch (Exception e)
+            {
+                LogError("Error getting event", e, provider);
             }
         }
         return default;
@@ -43,13 +82,41 @@ internal class CompositeDataProvider : AuditDataProvider
 
     public override async Task<object> InsertEventAsync(AuditEvent auditEvent, CancellationToken cancellationToken)
     {
-        var tasks = _providers.Select(provider => provider.InsertEventAsync(auditEvent)).ToList();
+        var tasks = _providers.Select(provider =>
+        {
+            try
+            {
+                var result = provider.Provider.InsertEventAsync(auditEvent);
+                LogMessage("Event inserted", provider);
+                return result;
+            }
+            catch (Exception e)
+            {
+                LogError("Error inserting event", e, provider);
+            }
+
+            return default;
+        }).ToList();
         return Task.WhenAll(tasks).ContinueWith(_ => (object)null);
     }
 
     public override async Task ReplaceEventAsync(object eventId, AuditEvent auditEvent, CancellationToken cancellationToken)
     {
-        var tasks = _providers.Select(provider => provider.ReplaceEventAsync(eventId, auditEvent)).ToList();
+        var tasks = _providers.Select(provider => 
+        {
+            try
+            {
+                var result = provider.Provider.ReplaceEventAsync(eventId, auditEvent);
+                LogMessage("Event replaced", provider);
+                return result;
+            }
+            catch (Exception e)
+            {
+                LogError("Error replacing event", e, provider);
+            }
+
+            return default;
+        }).ToList();
         Task.WhenAll(tasks);
     }
 
@@ -57,12 +124,46 @@ internal class CompositeDataProvider : AuditDataProvider
     {
         foreach (var provider in _providers)
         {
-            var result = await provider.GetEventAsync<T>(eventId);
-            if (result != null)
+            try
             {
-                return result;
+                var result = await provider.Provider.GetEventAsync<T>(eventId);
+                LogMessage("Event retrieved", provider);
+                if (result != null)
+                {
+                    return result;
+                }
+            }
+            catch (Exception e)
+            {
+                LogError("Error getting event", e, provider);
             }
         }
         return default;
+    }
+
+    private void LogMessage(string message, SegugioDataProvider provider)
+    {
+        switch (provider.LogTypes) 
+        {
+            case ISegugioProvider.LogTypes.Console:
+                Console.WriteLine($"{message} on {provider.Provider.GetType().Name}");
+                break;
+            default:
+                break;
+        };
+    }
+
+    private void LogError(string message, Exception e, SegugioDataProvider provider)
+    {
+        switch (provider.LogTypes) 
+        {
+            case ISegugioProvider.LogTypes.Console:
+                Console.WriteLine(e);
+                break;
+            case ISegugioProvider.LogTypes.Exception:
+                throw new SegugioException($"{message} on {provider.Provider.GetType().Name}", e);
+            default:
+                break;
+        };
     }
 }

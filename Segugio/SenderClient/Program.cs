@@ -51,11 +51,18 @@ var segugioAuditor = builder.Services.BuildServiceProvider().GetRequiredService<
 segugioAuditor.Setup(new List<ISegugioProvider>
 {
     new SqlServerProvider(
-        new AuditTableConfiguration(connectionString,"Audit","EntityAuditLog","UserName","DataJSon", 
-            "LastUpdate", "UserRole", "UserAdmin", "Id", "IpAddress","RouteData"
+        new AuditTableConfiguration(connectionString,"Audit","EntityAuditLog","Id","DataJSon","LastUpdate",
+            new List<KeyValuePair<string, string>>
+            {
+                new KeyValuePair<string, string>("IpAddress", "IpAddress"),
+                new KeyValuePair<string, string>("RouteData", "RoutePath"),
+                new KeyValuePair<string, string>("UserName", "UserName"),
+                new KeyValuePair<string, string>("UserRole", "Role")
+            },
+            ISegugioProvider.LogTypes.Console
         )
     ),
-    new SerilogProvider(new QradarConfiguration("localhost", "514"))
+    new SerilogProvider(new QradarConfiguration("localhost", "514", ISegugioProvider.LogTypes.Console))
 });
 
 // // Configura Swagger per i metodi API

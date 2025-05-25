@@ -38,6 +38,7 @@ public interface ISegugioAuditor
 public class SegugioAuditor : ISegugioAuditor
 {
     private readonly IContestoAudit _contestoAudit;
+    private readonly bool _consoleMessaggeEnabled;
 
     /// <summary>
     /// Inizializza un'istanza della classe <see cref="SegugioAuditor"/>.
@@ -82,15 +83,14 @@ public class SegugioAuditor : ISegugioAuditor
     {
         var compositeDataProvider = new CompositeDataProvider(
             providers
-                .Select(p => p.GetAuditProvider(_contestoAudit))
+                .Select(p => new SegugioDataProvider("", p.GetAuditProvider(_contestoAudit), p.LogType))
                 .ToList());
         Configuration.Setup().UseCustomProvider(compositeDataProvider);
     }
 
     public AuditScope CreateScope(string eventType)
     {
-        // return AuditScope.Create("Login", () => new { Data = "Esempio" }, new { Utente = "Admin" });
-        return AuditScope.Create("Login", () => null);
+        return AuditScope.Create(eventType, () => null);
     }
 
     public AuditScope CreateScope(string eventType, object target, object extraField)

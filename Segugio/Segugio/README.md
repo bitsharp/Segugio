@@ -15,7 +15,6 @@ Segugio è una libreria per la gestione del sistema di audit in progetti .NET. C
 
 ## Installazione
 
-### 1. Aggiungere la libreria via NuGet
 Puoi installare Segugio direttamente dal **Package Manager Console** usando il comando:
 
 ```bash
@@ -28,19 +27,10 @@ Oppure aggiungendolo nel file `.csproj`:
 <PackageReference Include="Segugio" Version="1.0.0" />
 ```
 
-### 2. Usare la DLL
-Se preferisci utilizzare il file DLL precompilato:
-1. Copia il file `Segugio.dll` nella directory desiderata del tuo progetto.
-2. Aggiungi un riferimento alla **DLL**:
-    - In Visual Studio, fai clic con il tasto destro sul tuo progetto > **Add Reference** > **Browse** > seleziona il file `Segugio.dll`.
-
----
-
 ## Configurazione
 
 ### Passaggi principali
-1. **Implementa l'interfaccia `IContestoAudit`** per configurare informazioni contestuali (indirizzo IP, ID sessione, dati di routing).
-2. **Implementa l'interfaccia `IUtenteAudit`** per fornire informazioni sull'utente (es. ID utente, ruolo).
+1. **Implementa l'interfaccia `IContestoAudit`** per configurare informazioni contestuali dell'applicazione (indirizzo IP, ID sessione, dati di routing, ID utente, ruolo).
 3. **Usa uno dei provider** già inclusi nella libreria.
 4. **Crea uno o più provider** derivando dall'interfaccia `ISegugioProvider` per salvare i dati audit nel supporto desiderato.
 
@@ -52,13 +42,22 @@ Se preferisci utilizzare il file DLL precompilato:
 ```csharp
 public class ContestoAudit : IContestoAudit
 {
-    public string GetRemoteIpAddress() => "192.168.1.1"; // Esempio di indirizzo IP remoto
+    private readonly IHttpContextAccessor _httpContextAccessor;
+    public ContestoApplicativo(IHttpContextAccessor httpContextAccessor)
+    {
+        _httpContextAccessor = httpContextAccessor;
+    }
 
-    public string GetSessionId() => Guid.NewGuid().ToString(); // Genera un ID univoco per la sessione
-
-    public string GetTerminalId() => Environment.MachineName; // Restituisce il nome del terminale
-
-    public RouteData? GetHttpRouteData() => return new RouteData(); // Restituisci configurazione per la rotta HTTP (esempio semplificato)
+    public string GetCustomAttribute(string attributeName)
+    {
+        return attributeName switch
+        {
+            "IpAddress" => _httpContextAccessor.HttpContext?.Connection.RemoteIpAddress?.ToString() ?? "",
+            "RoutePath" => JsonSerializer.Serialize(_httpContextAccessor.HttpContext?.GetRouteData()??new RouteData()),
+            "QueryPath" => $"{_httpContextAccessor.HttpContext?.GetRouteData().Values["controller"]}/{_httpContextAccessor.HttpContext?.GetRouteData().Values["action"]}",
+            _ => ""
+        };
+    }
 }
 ```
 
@@ -66,14 +65,24 @@ public class ContestoAudit : IContestoAudit
 Ad esempio, puoi configurare i due già previsti così:
 ```csharp
     new SqlServerProvider(
-        new AuditTableConfiguration(connectionString,"SchemaTabellaDiAudit","NomeTabellaDiAudit",
-            "CampoUserName","CampoDatiJSon", "CampoUltimoAggiornamento", 
-            "CampoProfilo", "CampoUtenteAmministratore", 
-            "CampoIdTabellaAudit", "CampoIndirizzoIp","CampoRouteDataJson"
+        new AuditTableConfiguration(connectionString,"AuditTableSchema","AuditTableName","IdField","EntityDataJSonField","LastUpdateField",
+            new List<KeyValuePair<string, string>>
+            {
+                new KeyValuePair<string, string>("IpAddressField", "IpAddress"),
+                new KeyValuePair<string, string>("RouteDataField", "RoutePath"),
+                new KeyValuePair<string, string>("UserNameField", "UserName"),
+                new KeyValuePair<string, string>("UserRoleField", "Role")
+            },
+            ISegugioProvider.LogTypes.Console
         )
     ),
-    new SerilogProvider("serverSerilog", "porta")
+    new SerilogProvider(new QradarConfiguration("serverSerilog", "port", ISegugioProvider.LogTypes.Console))
 ```
+Puoi decidere inoltre il comportamento che deve avere il sistema di Audit per supportarti nello sviluppo impostando per ogni provider la modalità di log e gestione eventuali anomalie:
+- **ISegugioProvider.LogTypes.None**: opzione di default, non scrive niente in console ed in caso di mancata registrazione sul provider di Audit non solleva eccezioni.
+- **ISegugioProvider.LogTypes.Console**: Scrive in console messaggi di successo per registrazione dell'audit da parte del provider ed in caso di mancata registrazione scrive il problema in console senza sollevare eccezioni.
+- **ISegugioProvider.LogTypes.Exception**: Non scrive nessun messaggio in console e nel caso di mancata registrazione dell'audit solleva un'eccezione di tipo SegugioException.
+
 
 ### 3. Creazione di un nuovo provider
 Ad esempio, creare un nuovo provider per Serilog così:
@@ -98,22 +107,26 @@ public class SerilogProvider : ISegugioProvider
         });
         return serilogProvider;
     }
+    
+    public ISegugioProvider.LogTypes LogType => ISegugioProvider.LogTypes.None;
 }
 ```
 
 ### 4. Setup del sistema di audit
 Connetti tutto alla classe `SegugioAuditor` e configura il sistema:
 ```csharp
-var contestoAudit = new ContestoAudit();
-var utenteAudit = new UtenteAudit();
+builder.Services.AddScoped<IContestoAudit, ContestoApplicativo>();
+builder.Services.AddScoped<ISegugioAuditor, SegugioAuditor>();
 
-var providers = new List<ISegugioProvider>
+var segugioAuditor = builder.Services.BuildServiceProvider().GetRequiredService<ISegugioAuditor>();
+segugioAuditor.Setup(new List<ISegugioProvider>
 {
-    new SerilogProvider("127.0.0.1", "514") // Configura il provider
-};
-
-var auditor = new SegugioAuditor(contestoAudit, utenteAudit);
-auditor.Setup(providers);
+    new SqlServerProvider(
+        new AuditTableConfiguration(connectionString,"Audit","EntityAuditLog","Id","DataJSon","LastUpdate")
+    ),
+    new SerilogProvider(new QradarConfiguration("localhost", "514", ISegugioProvider.LogTypes.Console)),
+    new CustomProvider()
+});
 
 // Sistema audit configurato!
 ```

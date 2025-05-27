@@ -15,12 +15,4 @@ public interface IContestoAudit
     /// </summary>
     /// <returns>Una stringa che rappresenta il valore richiesto.</returns>
     string GetCustomAttribute(string attributeName);
-
-    // string GetRemoteIpAddress();
-    // string GetSessionId();
-    // string GetTerminalId();
-    // RouteData? GetHttpRouteData();
-    // string GetUserAccount();
-    // string GetRealAccount();
-    // string GetRoles();
 }

@@ -5,6 +5,9 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <AssemblyVersion>1.0</AssemblyVersion>
+        <Version>1.0.1</Version>
+        <Title>Segugio</Title>
+        <Authors>Bitsharp</Authors>
     </PropertyGroup>
 
     <ItemGroup>

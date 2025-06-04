@@ -124,7 +124,7 @@ segugioAuditor.Setup(new List<ISegugioProvider>
     new SqlServerProvider(
         new AuditTableConfiguration(connectionString,"Audit","EntityAuditLog","Id","DataJSon","LastUpdate")
     ),
-    new SerilogProvider(new QradarConfiguration("localhost", "514", ISegugioProvider.LogTypes.Console)),
+    new SerilogProvider(new QradarConfiguration("localhost", "514")),
     new CustomProvider()
 });
 

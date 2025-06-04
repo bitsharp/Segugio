@@ -1,11 +1,21 @@
 ﻿using System;
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace SyslogServer
 {
+    internal class LogMessage
+    {
+        public string timestamp { get; set; }
+        public string level { get; set; }
+        public string message { get; set; }
+    }
+
     internal class Program
     {
         public static async Task Main(string[] args)
@@ -13,6 +23,7 @@ namespace SyslogServer
             TcpListener tcpListener = new TcpListener(IPAddress.Any, 514);
             tcpListener.Start();
             Console.WriteLine("Fake Syslog server listining on port 514...");
+            var certificatePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Certificati\\certificate.pfx");
 
             while (true)
             {
@@ -37,7 +48,10 @@ namespace SyslogServer
                     }
                 }
                 string message = messageBuilder.ToString();
-                Console.WriteLine($"Received message from {tcpClient.Client.RemoteEndPoint}: {message}");
+                // Console.WriteLine($"Received message from {tcpClient.Client.RemoteEndPoint}: {message}");
+
+                string decryptedMessage = DecryptMessageWithCertificate(message, certificatePath);
+                Console.WriteLine($"Received message from {tcpClient.Client.RemoteEndPoint}: {decryptedMessage}");
             }
             // UdpClient udpClient = new UdpClient(514);
             // Console.WriteLine("Fake Syslog server listening on port 514...");
@@ -48,6 +62,38 @@ namespace SyslogServer
             //     string message = Encoding.ASCII.GetString(result.Buffer);
             //     Console.WriteLine($"Received message from {result.RemoteEndPoint}: {message}");
             // }
+        }
+        
+        /// <summary>
+        /// Decripta un messaggio ricevuto utilizzando un certificato con una chiave privata.
+        /// </summary>
+        /// <param name="encryptedMessage">Il messaggio criptato in Base64.</param>
+        /// <param name="certificatePath">Il percorso del certificato (che contiene la chiave privata).</param>
+        /// <returns>Il messaggio decriptato in chiaro.</returns>
+        private static string DecryptMessageWithCertificate(string encryptedMessage, string certificatePath)
+        {
+            if (string.IsNullOrWhiteSpace(certificatePath) || !File.Exists(certificatePath))
+            {
+                throw new FileNotFoundException("Certificate file not found at specified path.", certificatePath);
+            }
+    
+            // Caricare il certificato
+            var certificate = new X509Certificate2(certificatePath, "testsegugio", X509KeyStorageFlags.Exportable);
+            using var rsa = certificate.GetRSAPrivateKey();
+    
+            if (rsa == null)
+            {
+                throw new InvalidOperationException("No valid RSA private key found in the certificate.");
+            }
+
+            // Convertire il messaggio Base64 in byte
+            var encryptedBytes = Convert.FromBase64String(encryptedMessage);
+
+            // Decriptare i dati
+            var decryptedBytes = rsa.Decrypt(encryptedBytes, RSAEncryptionPadding.OaepSHA256);
+
+            // Convertire in stringa
+            return Encoding.UTF8.GetString(decryptedBytes);
         }
     }
 }

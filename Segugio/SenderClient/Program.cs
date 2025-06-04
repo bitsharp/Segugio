@@ -62,7 +62,13 @@ segugioAuditor.Setup(new List<ISegugioProvider>
             ISegugioProvider.LogTypes.Console
         )
     ),
-    new SerilogProvider(new QradarConfiguration("localhost", "514", ISegugioProvider.LogTypes.Console))
+    new SerilogProvider(
+        new QradarConfiguration("localhost", "514",
+            CertificateTypes.RSA,
+            ISegugioProvider.LogTypes.Console,
+            "Certificati\\certificate.crt"
+        )
+    )
 });
 
 // // Configura Swagger per i metodi API

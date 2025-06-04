@@ -2,12 +2,12 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
   <metadata>
     <id>Segugio</id>
-    <version>1.0.1</version>
+    <version>1.0.2</version>
     <authors>Bitsharp</authors>
     <owners>Bitsharp</owners>
     <description>Una libreria per la gestione di audit con più provider.</description>
     <license type="expression">MIT</license>
-    <projectUrl>https://github.com/tuo-repo</projectUrl>
+    <projectUrl>https://github.com/bitsharp/Segugio</projectUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <dependencies>
       <!-- Qui aggiungi le tue dipendenze (librerie necessarie) -->

@@ -6,6 +6,7 @@ using System.Text;
 using Audit.Core;
 using Audit.Core.Providers;
 using Audit.EntityFramework;
+using Microsoft.Extensions.Configuration;
 using Segugio.Ports;
 using Serilog;
 using Serilog.Core;
@@ -25,15 +26,25 @@ namespace Segugio.Providers;
 public class SerilogProvider : ISegugioProvider
 {
     private readonly ISerilogConfiguration _configuration;
-    private readonly TcpClient _client;
 
     public SerilogProvider(ISerilogConfiguration configuration)
     {
         _configuration = configuration;
 
-        if (!int.TryParse(_configuration.ServerPort, out int port))
-            throw new SegugioException("Il valore di ServerPort non è un numero valido.");
-        _client = new TcpClient(_configuration.ServerAddress, port);
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_configuration.ServerAddress))
+                throw new SegugioException("L'indirizzo del server non può essere vuoto.");
+
+            if (!int.TryParse(_configuration.ServerPort, out int port))
+                throw new SegugioException("Il valore di ServerPort non è un numero valido.");
+            if (port < 1 || port > 65535)
+                throw new SegugioException("La porta del server deve essere un numero compreso tra 1 e 65535.");
+        }
+        catch (Exception e)
+        {
+            HandleException(e);
+        }
     }
 
     public string GetProviederName => "SerilogProvider";
@@ -61,7 +72,7 @@ public class SerilogProvider : ISegugioProvider
             config.OnInsert(ev =>
             {
                 var logger = new LoggerConfiguration()
-                    .WriteTo.Sink(new RawTcpSink(_client))
+                    .WriteTo.Sink(new RawTcpSink(_configuration))
                     .CreateLogger();
                 
                 var entiyName = (ev.GetEntityFrameworkEvent() != null
@@ -107,6 +118,18 @@ public class SerilogProvider : ISegugioProvider
     }
     
     public ISegugioProvider.LogTypes LogType => _configuration.LogTypes;
+
+    private void HandleException(Exception e)
+    {
+        switch (_configuration.LogTypes) 
+        {
+            case ISegugioProvider.LogTypes.Console:
+                Console.WriteLine(e);
+                break;
+            case ISegugioProvider.LogTypes.Exception:
+                throw new SegugioException("Generic error in SerilogProvider", e);
+        };
+    }
     
     /// <summary>
     /// Crittografa un messaggio utilizzando un certificato passato come percorso.
@@ -269,11 +292,11 @@ public class SerilogProvider : ISegugioProvider
 
 public class RawTcpSink : ILogEventSink
 {
-    private readonly TcpClient _client;
+    private readonly ISerilogConfiguration _configuration;
 
-    public RawTcpSink(TcpClient client)
+    public RawTcpSink(ISerilogConfiguration configuration)
     {
-        _client = client ?? throw new ArgumentNullException(nameof(client));
+        _configuration = configuration;
     }
 
     public void Emit(LogEvent logEvent)
@@ -287,17 +310,35 @@ public class RawTcpSink : ILogEventSink
         // Invia il messaggio tramite TCP
         try
         {
-            using var client = _client;
-            using var stream = client.GetStream();
-
             // Converti il messaggio in byte e invia
             var data = Encoding.UTF8.GetBytes(message + "\n"); // Aggiungi newline per il server
-            stream.Write(data, 0, data.Length);
+
+            // Creazione di un TcpClient dedicato per ogni connessione
+            _ = Task.Run(async () =>
+            {
+                using var client = new TcpClient();
+                try
+                {
+                    await client.ConnectAsync(_configuration.ServerAddress, int.Parse(_configuration.ServerPort));
+                    using var stream = client.GetStream();
+                    await stream.WriteAsync(data, 0, data.Length);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Errore durante l'invio del messaggio: {ex.Message}");
+                }
+            }).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            // Logga a console eventuali errori nella trasmissione TCP
-            Console.WriteLine($"Errore durante la trasmissione del messaggio TCP: {ex.Message}");
+            switch (_configuration.LogTypes) 
+            {
+                case ISegugioProvider.LogTypes.Console:
+                    Console.WriteLine(ex);
+                    break;
+                case ISegugioProvider.LogTypes.Exception:
+                    throw new SegugioException("Generic error in SerilogProvider", ex);
+            };
         }
     }
 }

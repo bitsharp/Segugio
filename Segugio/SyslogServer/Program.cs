@@ -9,21 +9,44 @@ using System.Threading.Tasks;
 
 namespace SyslogServer
 {
-    internal class LogMessage
+    internal enum ServerTypes
     {
-        public string timestamp { get; set; }
-        public string level { get; set; }
-        public string message { get; set; }
+        TCP,
+        TCPWithSSL,
+        UDP
     }
 
     internal class Program
     {
         public static async Task Main(string[] args)
         {
+            var serverType = ServerTypes.TCP;
+            
+            if (serverType == ServerTypes.TCPWithSSL || serverType == ServerTypes.TCP)
+                await StartTcpListenerAndProcessMessages(serverType);
+            else if (serverType == ServerTypes.UDP)
+                await StartUdpListenerAndProcessMessages(serverType);
+        }
+
+        private static async Task StartUdpListenerAndProcessMessages(ServerTypes serverType)
+        {
+            UdpClient udpClient = new UdpClient(514);
+            Console.WriteLine("Fake Syslog server listening on port 514...");
+            
+            while (true)
+            {
+                UdpReceiveResult result = await udpClient.ReceiveAsync();
+                string message = Encoding.ASCII.GetString(result.Buffer);
+                Console.WriteLine($"Received message from {result.RemoteEndPoint}: {message}");
+            }
+        }
+
+        private static async Task StartTcpListenerAndProcessMessages(ServerTypes serverType)
+        {
             TcpListener tcpListener = new TcpListener(IPAddress.Any, 514);
             tcpListener.Start();
             Console.WriteLine("Fake Syslog server listining on port 514...");
-            var certificatePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Certificati\\certificate.pfx");
+            var certificatePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Certificati\\RSApublic.pfx");
 
             while (true)
             {
@@ -48,22 +71,16 @@ namespace SyslogServer
                     }
                 }
                 string message = messageBuilder.ToString();
-                // Console.WriteLine($"Received message from {tcpClient.Client.RemoteEndPoint}: {message}");
-
-                string decryptedMessage = DecryptMessageWithCertificate(message, certificatePath);
-                Console.WriteLine($"Received message from {tcpClient.Client.RemoteEndPoint}: {decryptedMessage}");
+                if (serverType == ServerTypes.TCP)
+                    Console.WriteLine($"Received message from {tcpClient.Client.RemoteEndPoint}: {message}");
+                else if (serverType == ServerTypes.TCPWithSSL)
+                {
+                    string decryptedMessage = DecryptMessageWithCertificate(message, certificatePath);
+                    Console.WriteLine($"Received message from {tcpClient.Client.RemoteEndPoint}: {decryptedMessage}");
+                }
             }
-            // UdpClient udpClient = new UdpClient(514);
-            // Console.WriteLine("Fake Syslog server listening on port 514...");
-            //
-            // while (true)
-            // {
-            //     UdpReceiveResult result = await udpClient.ReceiveAsync();
-            //     string message = Encoding.ASCII.GetString(result.Buffer);
-            //     Console.WriteLine($"Received message from {result.RemoteEndPoint}: {message}");
-            // }
         }
-        
+
         /// <summary>
         /// Decripta un messaggio ricevuto utilizzando un certificato con una chiave privata.
         /// </summary>

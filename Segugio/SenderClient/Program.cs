@@ -64,10 +64,14 @@ segugioAuditor.Setup(new List<ISegugioProvider>
     ),
     new SerilogProvider(
         new QradarConfiguration("localhost", "514",
-            CertificateTypes.RSA,
-            ISegugioProvider.LogTypes.Console,
-            "Certificati\\certificate.crt"
+            CertificateTypes.None,
+            ISegugioProvider.LogTypes.Console
         )
+        // new QradarConfiguration("localhost", "514",
+        //     CertificateTypes.RSA_WithPublicKey,
+        //     ISegugioProvider.LogTypes.Console,
+        //     "Certificati\\RSAPublicKey\\certificate.crt"
+        // )
     )
 });
 

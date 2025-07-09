@@ -25,10 +25,15 @@ namespace Segugio.Providers;
 public class SerilogProvider : ISegugioProvider
 {
     private readonly ISerilogConfiguration _configuration;
+    private readonly TcpClient _client;
 
     public SerilogProvider(ISerilogConfiguration configuration)
     {
         _configuration = configuration;
+
+        if (!int.TryParse(_configuration.ServerPort, out int port))
+            throw new SegugioException("Il valore di ServerPort non è un numero valido.");
+        _client = new TcpClient(_configuration.ServerAddress, port);
     }
 
     public string GetProviederName => "SerilogProvider";
@@ -55,16 +60,8 @@ public class SerilogProvider : ISegugioProvider
         {
             config.OnInsert(ev =>
             {
-                if (!int.TryParse(_configuration.ServerPort, out int port))
-                {
-                    throw new SegugioException("Il valore di ServerPort non è un numero valido.");
-                }
-                
                 var logger = new LoggerConfiguration()
-                    .WriteTo.Sink(new RawTcpSink(_configuration.ServerAddress, port))
-                    // .WriteTo.TCPSink(
-                    //     $"tcp://{_configuration.ServerAddress}:{_configuration.ServerPort}"
-                    // )
+                    .WriteTo.Sink(new RawTcpSink(_client))
                     .CreateLogger();
                 
                 var entiyName = (ev.GetEntityFrameworkEvent() != null
@@ -130,27 +127,27 @@ public class SerilogProvider : ISegugioProvider
         // Validare il certificato in base al tipo configurato
         ValidateCertificateForType(certificate, certificateType);
 
-        switch (certificateType)
+        return certificateType switch
         {
-            case CertificateTypes.RSA:
-                return EncryptWithRSA(certificate, message);
-
-            case CertificateTypes.ECC:
-                return EncryptWithECC(certificate, message);
-
-            default:
-                throw new InvalidOperationException("Tipo di certificato non supportato.");
-        }
+            CertificateTypes.RSA_WithPrivateKey => EncryptWithRSAPrivateKey(certificate, message),
+            CertificateTypes.RSA_WithPublicKey => EncryptWithRSAPublicKey(certificate, message),
+            CertificateTypes.ECDsa_WithPrivateKey => EncryptWithECDsa(certificate, message, true),
+            CertificateTypes.ECDsa_WithPublicKey => EncryptWithECDsa(certificate, message, false),
+            _ => throw new InvalidOperationException($"Unsupported certificate type {certificateType.ToString()}. Please check the certificate type and try again.")
+        };    
     }
     
     /// <summary>
-    /// Esempio di crittografia con certificato RSA.
+    /// Esempio di crittografia con certificato RSA con chiave pubblica.
     /// </summary>
     /// <param name="certificate">Il certificato caricato.</param>
     /// <param name="message">Il messaggio da criptare.</param>
     /// <returns>Il messaggio crittografato come Base64.</returns>
-    private string EncryptWithRSA(X509Certificate2 certificate, string message)
+    private string EncryptWithRSAPublicKey(X509Certificate2 certificate, string message)
     {
+        if (certificate.HasPrivateKey)
+            throw new InvalidOperationException("The certificate provided has a private key. Please use a certificate with a public key only.");
+        
         // Ottenere la chiave pubblica RSA
         using var rsa = certificate.GetRSAPublicKey();
         if (rsa == null)
@@ -165,6 +162,32 @@ public class SerilogProvider : ISegugioProvider
         // Convertire il risultato in Base64
         return Convert.ToBase64String(encryptedBytes);
     }
+    
+    /// <summary>
+    /// Esempio di crittografia con certificato RSA con chiave privata.
+    /// </summary>
+    /// <param name="certificate">Il certificato caricato.</param>
+    /// <param name="message">Il messaggio da criptare.</param>
+    /// <returns>Il messaggio crittografato come Base64.</returns>
+    private string EncryptWithRSAPrivateKey(X509Certificate2 certificate, string message)
+    {
+        if (!certificate.HasPrivateKey)
+            throw new InvalidOperationException("The certificate provided hasn't a private key. Please use a certificate with a private key only.");
+        
+        // Ottenere la chiave private RSA
+        using var rsa = certificate.GetRSAPrivateKey();
+        if (rsa == null)
+            throw new InvalidOperationException("No valid RSA private key found in the certificate.");
+
+        // Convertire il messaggio in byte
+        var messageBytes = Encoding.UTF8.GetBytes(message);
+
+        // Firma digitale del messaggio
+        var signedBytes = rsa.SignData(messageBytes, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+
+        // Convertire il risultato in Base64
+        return Convert.ToBase64String(signedBytes);
+    }
 
     /// <summary>
     /// Esempio di crittografia con certificato ECC.
@@ -172,12 +195,17 @@ public class SerilogProvider : ISegugioProvider
     /// <param name="certificate">Il certificato caricato.</param>
     /// <param name="message">Il messaggio da criptare.</param>
     /// <returns>Il messaggio crittografato come Base64.</returns>
-    private string EncryptWithECC(X509Certificate2 certificate, string message)
+    private string EncryptWithECDsa(X509Certificate2 certificate, string message, bool privateKey)
     {
-        // Ottenere la chiave pubblica ECC
-        using var ecdsa = certificate.GetECDsaPublicKey();
+        if (certificate.HasPrivateKey && !privateKey)
+            throw new InvalidOperationException("The certificate provided has a private key. Please use a certificate with a public key only.");
+        if (!certificate.HasPrivateKey && privateKey)
+            throw new InvalidOperationException("The certificate provided hasn't a private key. Please use a certificate with a private key only.");
+
+        // Ottenere la chiave pubblica ECDsa
+        using var ecdsa = privateKey ? certificate.GetECDsaPrivateKey() : certificate.GetECDsaPublicKey();
         if (ecdsa == null)
-            throw new InvalidOperationException("No valid ECC public key found in the certificate.");
+            throw new InvalidOperationException("No valid ECDsa public/private key found in the certificate.");
 
         // Convertire il messaggio in byte
         var messageBytes = Encoding.UTF8.GetBytes(message);
@@ -200,20 +228,33 @@ public class SerilogProvider : ISegugioProvider
     {
         switch (certificateType)
         {
-            case CertificateTypes.RSA:
-                if (certificate.GetRSAPublicKey() == null)
-                    throw new InvalidOperationException("The certificate provided is not compatible with RSA.");
-                break;
+            case CertificateTypes.RSA_WithPublicKey when certificate.GetRSAPublicKey() == null:
+                throw new InvalidOperationException("The certificate provided is not compatible with RSA public key encryption.");
 
-            case CertificateTypes.ECC:
-                if (certificate.GetECDsaPublicKey() == null)
-                    throw new InvalidOperationException("The certificate provided is not compatible with ECC.");
-                break;
-            
+            case CertificateTypes.RSA_WithPrivateKey when certificate.GetRSAPrivateKey() == null:
+                throw new InvalidOperationException("The certificate provided is not compatible with RSA private key encryption.");
+
+            case CertificateTypes.DSA_WithPublicKey when certificate.GetDSAPublicKey() == null:
+                throw new InvalidOperationException("The certificate provided is not compatible with DSA public key encryption.");
+
+            case CertificateTypes.DSA_WithPrivateKey when certificate.GetDSAPrivateKey() == null:
+                throw new InvalidOperationException("The certificate provided is not compatible with DSA private key encryption.");
+
+            case CertificateTypes.ECDsa_WithPublicKey when certificate.GetECDsaPublicKey() == null:
+                throw new InvalidOperationException("The certificate provided is not compatible with ECDsa public key encryption.");
+
+            case CertificateTypes.ECDsa_WithPrivateKey when certificate.GetECDsaPrivateKey() == null:
+                throw new InvalidOperationException("The certificate provided is not compatible with ECDsa private key encryption.");
+
+            case CertificateTypes.RSA_WithPublicKey or CertificateTypes.RSA_WithPrivateKey or
+                CertificateTypes.DSA_WithPublicKey or CertificateTypes.DSA_WithPrivateKey or
+                CertificateTypes.ECDsa_WithPublicKey or CertificateTypes.ECDsa_WithPrivateKey:
+                break; // Nessun errore, il tipo di certificato è valido.
+
             default:
-                throw new NotSupportedException($"Tipo di certificato non supportato: {certificateType}");
+                throw new NotSupportedException($"Tipo di certificato non supportato: {certificateType.ToString()}");
         }
-
+        
         if (DateTime.Now > certificate.NotAfter)
         {
             throw new InvalidOperationException("Il certificato è scaduto.");
@@ -228,13 +269,11 @@ public class SerilogProvider : ISegugioProvider
 
 public class RawTcpSink : ILogEventSink
 {
-    private readonly string _host;
-    private readonly int _port;
+    private readonly TcpClient _client;
 
-    public RawTcpSink(string host, int port)
+    public RawTcpSink(TcpClient client)
     {
-        _host = host ?? throw new ArgumentNullException(nameof(host));
-        _port = port > 0 ? port : throw new ArgumentOutOfRangeException(nameof(port));
+        _client = client ?? throw new ArgumentNullException(nameof(client));
     }
 
     public void Emit(LogEvent logEvent)
@@ -248,7 +287,7 @@ public class RawTcpSink : ILogEventSink
         // Invia il messaggio tramite TCP
         try
         {
-            using var client = new TcpClient(_host, _port);
+            using var client = _client;
             using var stream = client.GetStream();
 
             // Converti il messaggio in byte e invia
@@ -266,8 +305,12 @@ public class RawTcpSink : ILogEventSink
 public enum CertificateTypes
 {
     None,
-    RSA,
-    ECC // Per esempio, altri tipi di certificati possono essere aggiunti qui.
+    RSA_WithPrivateKey,
+    RSA_WithPublicKey,
+    DSA_WithPrivateKey,
+    DSA_WithPublicKey,
+    ECDsa_WithPrivateKey,
+    ECDsa_WithPublicKey
 }
 
 public interface ISerilogConfiguration
